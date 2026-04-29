@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GLYPH — ASCII PORTRAIT GEN // 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --prime:       #00FFFF;
+    --prime-soft:  #80FFFF;
+    --prime-dim:   #007A7A;
+    --lime:        #AAFF00;
+    --bezel:       #050505;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; background:#000; overflow:hidden; }
+  body{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--prime);
+    cursor:crosshair;
+    user-select:none;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .bezel{
+    position:fixed; inset:0;
+    background: radial-gradient(ellipse at center, #020808 0%, #000 75%), #000;
+    z-index:0;
+  }
+  canvas#main{
+    position:fixed; inset:0;
+    width:100%; height:100%;
+    display:block;
+    z-index:1;
+  }
+
+  /* light scanlines — subtler for ASCII, doesn't fight the text */
+  .scanlines{
+    position:fixed; inset:0;
+    pointer-events:none; z-index:50;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0)    0px,
+      rgba(0,0,0,0)    2px,
+      rgba(0,0,0,0.20) 3px,
+      rgba(0,0,0,0.20) 4px
+    );
+    mix-blend-mode:multiply;
+  }
+  .vignette{
+    position:fixed; inset:0;
+    pointer-events:none; z-index:52;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.50) 80%, rgba(0,0,0,0.90) 100%);
+  }
+  .screen-tint{
+    position:fixed; inset:0;
+    pointer-events:none; z-index:49;
+    background: radial-gradient(ellipse at center, rgba(0,60,60,0.10), transparent 60%);
+    mix-blend-mode:screen;
+  }
+  .flicker{
+    position:fixed; inset:0;
+    pointer-events:none; z-index:53;
+    background:#fff;
+    opacity:0;
+    mix-blend-mode:overlay;
+    animation:flicker 6.7s infinite;
+  }
+  @keyframes flicker{
+    0%, 96%, 100%{ opacity:0; }
+    97%{ opacity:0.05; }
+    97.5%{ opacity:0; }
+    98%{ opacity:0.08; }
+    98.5%{ opacity:0; }
+  }
+  .shake{ animation: shake .35s ease both; }
+  @keyframes shake{
+    0%   { transform:translate(0,0); }
+    20%  { transform:translate(-2px, 1px); }
+    40%  { transform:translate(2px, -1px); }
+    60%  { transform:translate(-1px, 2px); }
+    80%  { transform:translate(1px, -2px); }
+    100% { transform:translate(0,0); }
+  }
+
+  /* ── HUD ── */
+  .hud{
+    position:fixed; z-index:200;
+    font-family:'JetBrains Mono', monospace;
+    text-shadow: 0 0 6px var(--prime), 0 0 18px rgba(0,255,255,0.35);
+    pointer-events:none;
+    letter-spacing:0.14em;
+  }
+  .hud-top{
+    top:18px; left:22px; right:22px;
+    display:flex; justify-content:space-between; gap:24px;
+    font-size:10.5px; font-weight:500;
+    text-transform:uppercase;
+  }
+  .hud-bottom{
+    bottom:18px; left:22px; right:22px;
+    display:flex; justify-content:space-between; gap:24px;
+    font-size:10px; opacity:0.85;
+    text-transform:uppercase;
+  }
+  .hud .accent{ color:var(--prime-soft); }
+  .hud .lime  { color:var(--lime); }
+  .hud .dim   { opacity:0.50; }
+
+  .rec-dot{
+    display:inline-block; width:8px; height:8px;
+    background:var(--prime); border-radius:50%;
+    box-shadow:0 0 8px var(--prime);
+    margin-right:6px; vertical-align:middle;
+    animation: rec 1.4s infinite;
+  }
+  @keyframes rec{ 0%,49%{opacity:1}50%,100%{opacity:0.2} }
+
+  .brand{
+    position:fixed; left:18px; top:50%;
+    transform: translate(-50%,-50%) rotate(-90deg);
+    transform-origin:center;
+    font-family:'VT323', monospace;
+    font-size:18px; letter-spacing:0.5em;
+    z-index:200; pointer-events:none;
+    color:var(--prime);
+    text-shadow:0 0 12px var(--prime), 0 0 28px rgba(0,255,255,0.4);
+    white-space:nowrap;
+  }
+  .brand .sep{ opacity:0.30; padding:0 8px; }
+
+  .ticks{
+    position:fixed; right:14px; top:80px; bottom:80px;
+    width:22px; z-index:200; pointer-events:none;
+    display:flex; flex-direction:column; justify-content:space-between;
+    align-items:flex-end;
+  }
+  .tick{ height:1px; background:var(--prime); box-shadow:0 0 4px var(--prime); opacity:0.45; }
+  .tick.long { width:18px; opacity:0.65; }
+  .tick.med  { width:11px; }
+  .tick.short{ width:6px; opacity:0.28; }
+
+  /* ── INTAKE ── */
+  .intake{
+    position:fixed; inset:0;
+    display:grid; place-items:center;
+    z-index:160;
+  }
+  .intake.hidden{ display:none; }
+  .dropzone{
+    position:relative;
+    border:1px dashed var(--prime-dim);
+    padding: clamp(34px,6vw,64px) clamp(24px,6vw,80px) clamp(30px,5vw,56px);
+    width: min(440px, 86vw);
+    text-align:center;
+    background: linear-gradient(180deg, rgba(0,30,30,0.25), rgba(0,10,10,0.40));
+    cursor:pointer;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    text-shadow: 0 0 10px var(--prime);
+  }
+  .dropzone::before,.dropzone::after,
+  .dropzone .corner-tl,.dropzone .corner-tr{
+    content:""; position:absolute; width:14px; height:14px;
+    border:2px solid var(--prime); box-shadow:0 0 8px var(--prime);
+  }
+  .dropzone::before{ top:-1px; left:-1px;  border-right:none; border-bottom:none; }
+  .dropzone::after { top:-1px; right:-1px; border-left:none;  border-bottom:none; }
+  .dropzone .corner-tl{ bottom:-1px; left:-1px;  border-right:none; border-top:none; }
+  .dropzone .corner-tr{ bottom:-1px; right:-1px; border-left:none;  border-top:none; }
+  .dropzone:hover,.dropzone.drag{
+    border-color:var(--prime);
+    background: linear-gradient(180deg, rgba(0,60,60,0.40), rgba(0,20,20,0.55));
+    box-shadow: 0 0 60px rgba(0,255,255,0.20), inset 0 0 60px rgba(0,255,255,0.07);
+  }
+  .dz-prompt{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:0.3em; color:var(--prime-soft); margin-bottom:14px; opacity:0.85; }
+  .dz-title { font-family:'VT323',monospace; font-size:clamp(30px,7.5vw,42px); letter-spacing:0.16em; line-height:1; margin-bottom:18px; word-break:break-word; }
+  .dz-sub   { font-size:clamp(10px,2.4vw,11px); letter-spacing:0.18em; opacity:0.75; margin-bottom:28px; }
+  .dz-formats{ font-family:'VT323',monospace; font-size:20px; letter-spacing:0.3em; color:var(--prime); opacity:0.9; }
+  .dz-hint  { margin-top:30px; font-size:9.5px; letter-spacing:0.35em; opacity:0.40; }
+  .blink::after{ content:"▌"; animation: blink 1s infinite step-end; margin-left:2px; }
+  @keyframes blink{ 0%,50%{opacity:1}51%,100%{opacity:0} }
+
+  /* ── CONTROLS ── */
+  .controls{
+    position:fixed; bottom:54px; left:50%;
+    transform:translateX(-50%);
+    display:flex; gap:6px;
+    z-index:210; font-family:'JetBrains Mono',monospace;
+  }
+  .controls.hidden{ display:none; }
+  .ctl{
+    background: rgba(0,10,10,0.55);
+    border:1px solid var(--prime-dim);
+    color:var(--prime);
+    padding:8px 14px; font-family:inherit; font-size:9.5px;
+    font-weight:500; letter-spacing:0.2em; cursor:pointer;
+    text-shadow: 0 0 6px var(--prime);
+    transition: all .15s; text-transform:uppercase;
+    backdrop-filter: blur(2px);
+  }
+  .ctl:hover{
+    border-color:var(--prime);
+    background: rgba(0,60,60,0.40);
+    box-shadow: 0 0 16px rgba(0,255,255,0.35), inset 0 0 12px rgba(0,255,255,0.07);
+    color:var(--prime-soft);
+  }
+  .ctl:active{ transform:translateY(1px); }
+  input[type=file]{ display:none; }
+
+  /* ── BOOT ── */
+  .boot{
+    position:fixed; inset:0; z-index:400; background:#000;
+    padding:32px 36px; font-family:'JetBrains Mono',monospace;
+    font-size:11.5px; line-height:1.7; color:var(--prime);
+    text-shadow: 0 0 6px var(--prime); overflow:hidden;
+  }
+  .boot.gone{ display:none; }
+  .boot .ln{ opacity:0; animation: bln .01s forwards; }
+  @keyframes bln{ to{ opacity:1; } }
+  .boot .ok  { color:var(--prime-soft); }
+  .boot .lime{ color:var(--lime); }
+  .boot .warn{ color:#ffd76b; text-shadow:0 0 6px #ffd76b; }
+  .boot .dim { opacity:0.5; }
+
+  @media (max-width: 720px){
+    .brand,.ticks{ display:none; }
+    .hud-top,.hud-bottom{ font-size:9px; letter-spacing:0.1em; gap:8px; left:12px; right:12px; }
+    .hud-top span:nth-child(2),.hud-bottom span:nth-child(2){ display:none; }
+    .controls{ bottom:44px; flex-wrap:wrap; justify-content:center; max-width:92vw; }
+    .ctl{ padding:7px 10px; font-size:9px; letter-spacing:0.15em; }
+    .boot{ font-size:10px; padding:22px 18px; }
+  }
+  @media (max-width:420px){
+    .dz-formats{ font-size:16px; letter-spacing:0.2em; }
+    .dz-hint   { font-size:8.5px; letter-spacing:0.25em; }
+  }
+</style>
+</head>
+<body>
+
+<div class="boot" id="boot">
+  <div class="ln" style="animation-delay:0ms">GLYPH-OS v1.0.0426 — RASTER_MATRIX // (c) PRIVATE BAND ◉ 2026</div>
+  <div class="ln" style="animation-delay:80ms">────────────────────────────────────────────────────────</div>
+  <div class="ln" style="animation-delay:140ms">[ <span class="ok">OK</span> ] character set ............... <span class="lime">86 GLYPHS</span></div>
+  <div class="ln" style="animation-delay:240ms">[ <span class="ok">OK</span> ] color matrix ................ 6 CHANNELS</div>
+  <div class="ln" style="animation-delay:340ms">[ <span class="ok">OK</span> ] raster engine ............... ACTIVE</div>
+  <div class="ln" style="animation-delay:440ms">[ <span class="ok">OK</span> ] glyph oscillators ........... ARMED</div>
+  <div class="ln" style="animation-delay:540ms">[ <span class="warn">..</span> ] particle field allocator ..... ALLOCATING</div>
+  <div class="ln" style="animation-delay:760ms">[ <span class="ok">OK</span> ] particle field allocator ..... 12,288 CELLS</div>
+  <div class="ln" style="animation-delay:860ms">[ <span class="ok">OK</span> ] cursor magnetics ............. ARMED</div>
+  <div class="ln" style="animation-delay:960ms">[ <span class="ok">OK</span> ] rogue glyph emitter .......... 40 WANDERERS</div>
+  <div class="ln" style="animation-delay:1080ms">────────────────────────────────────────────────────────</div>
+  <div class="ln dim" style="animation-delay:1180ms">awaiting input // drop a portrait to acquire signal<span class="blink"></span></div>
+</div>
+
+<div class="bezel"></div>
+<canvas id="main"></canvas>
+<div class="screen-tint"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="flicker"></div>
+
+<div class="brand">GLYPH<span class="sep">▪</span>ASCII<span class="sep">▪</span>2026</div>
+
+<div class="ticks">
+  <div class="tick long"></div>
+  <div class="tick short"></div>
+  <div class="tick med"></div>
+  <div class="tick short"></div>
+  <div class="tick long"></div>
+  <div class="tick short"></div>
+  <div class="tick med"></div>
+  <div class="tick short"></div>
+  <div class="tick long"></div>
+</div>
+
+<div class="hud hud-top">
+  <span><span class="rec-dot"></span>REC // RASTER_MATRIX</span>
+  <span id="status" class="accent">AWAITING SIGNAL</span>
+  <span><span class="dim">FRAMERATE</span> <span id="fps" class="accent">— FPS</span></span>
+</div>
+<div class="hud hud-bottom">
+  <span><span class="dim">GLYPH FIELD //</span> <span id="particles" class="accent">0</span></span>
+  <span class="dim">GLYPH-OS v1.0.0426 ▪ 6-COLOR ▪ 60Hz</span>
+  <span><span class="dim">CURSOR //</span> <span id="coords" class="accent">XY 0000,0000</span></span>
+</div>
+
+<div class="intake" id="intake">
+  <label class="dropzone" id="dropzone" for="file">
+    <span class="corner-tl"></span><span class="corner-tr"></span>
+    <div class="dz-prompt">▣ INPUT ▪ RASTER_MATRIX ▪ READY</div>
+    <div class="dz-title">INSERT&nbsp;MEDIA</div>
+    <div class="dz-sub">DROP IMAGE OR CLICK TO BROWSE</div>
+    <div class="dz-formats blink">JPG ▪ PNG ▪ WEBP</div>
+    <div class="dz-hint">▼  CURSOR DISTURBS GLYPH FIELD  ▼</div>
+  </label>
+  <input type="file" id="file" accept="image/*" />
+</div>
+
+<div class="controls hidden" id="controls">
+  <button class="ctl" id="reload">[ NEW IMAGE ]</button>
+  <button class="ctl" id="density">[ DENSITY ▪ HIGH ]</button>
+  <button class="ctl" id="charset">[ CHARSET ▪ ALL ]</button>
+  <button class="ctl" id="reactive">[ REACTIVE ▪ ON ]</button>
+  <button class="ctl" id="invert">[ POLARITY ▪ +  ]</button>
+  <button class="ctl" id="save">[ EXPORT FRAME ]</button>
+</div>
+
+<script>
+/* ============================================================
+   GLYPH // ASCII PORTRAIT GENERATOR
+   ============================================================ */
+
+const canvas = document.getElementById('main');
+const ctx    = canvas.getContext('2d', { alpha: false });
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0;
+
+const TWO_PI = Math.PI * 2;
+
+function resize(){
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width  = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (currentImg) processImage(currentImg);
+}
+window.addEventListener('resize', ()=>{ clearTimeout(window.__rsz); window.__rsz = setTimeout(resize,120); });
+
+/* ── pointer ── */
+const mouse = { x:-9999, y:-9999, active:false };
+window.addEventListener('mousemove', e=>{
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+  document.getElementById('coords').textContent =
+    `XY ${String(e.clientX).padStart(4,'0')},${String(e.clientY).padStart(4,'0')}`;
+});
+window.addEventListener('mouseleave', ()=>{ mouse.active = false; });
+window.addEventListener('touchmove', e=>{
+  if(e.touches[0]){ mouse.x=e.touches[0].clientX; mouse.y=e.touches[0].clientY; mouse.active=true; }
+},{ passive:true });
+window.addEventListener('touchend', ()=> mouse.active = false);
+
+/* ── character sets ── */
+const CHARSETS = {
+  ALL:     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*+-=[]{}|;:,./<>?',
+  ALPHA:   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+  NUMS:    '0123456789!@#$%^&*+-=[]{}|;:,./<>?',
+  SYMBOLS: '#@$%&!?*=+|^~;:,.[]{}()<>/\\',
+};
+const CHARSET_KEYS = Object.keys(CHARSETS);
+let   charsetIdx   = 0;
+let   CHARS        = CHARSETS.ALL;
+let   NCHARS       = CHARS.length;
+
+/* ── color palette: lime / green / cyan / teal family ── */
+const PALETTE = [
+  '#AAFF00',   /* bright chartreuse  */
+  '#00FF41',   /* phosphor green     */
+  '#00FFFF',   /* bright cyan        */
+  '#00E5FF',   /* sky cyan           */
+  '#40FFD0',   /* seafoam            */
+  '#00CCAA',   /* teal               */
+];
+const NCOLORS = PALETTE.length;
+
+/* ── density settings ── */
+const DENSITIES = ['HIGH','MED','LOW'];
+const CELL_FOR  = { HIGH:12, MED:16, LOW:22 };
+let   densityIdx = (window.innerWidth < 720) ? 1 : 0;
+let   CELL       = CELL_FOR[DENSITIES[densityIdx]];
+
+let reactive = true;
+let invert   = false;
+const MAX_PARTICLES = 12000;
+
+/* Bayer 4×4 ordered dither */
+const BAYER = new Uint8Array([
+   0,  8,  2, 10,
+  12,  4, 14,  6,
+   3, 11,  1,  9,
+  15,  7, 13,  5
+]);
+
+/* ── particle arrays ── */
+let originX, originY, posX, posY, velX, velY;
+let freqA, freqB, freqC, phaseA, phaseB, phaseC, ampX, ampY, mass, dampCoef;
+
+/* per-particle character state */
+let charIdx;    /* Uint8Array  — index into CHARS               */
+let colorIdx;   /* Uint8Array  — index into PALETTE             */
+let charAge;    /* Uint16Array — frames since last char change  */
+let charPeriod; /* Uint8Array  — frames between char changes    */
+let colorAge;   /* Uint16Array — frames since last color change */
+let colorPeriod;/* Uint8Array  — frames between color changes   */
+
+/* render buckets — pre-allocated, indexed by colorIdx */
+let buckets, bucketLen;
+
+/* ── wanderer system (same as CRT gen) ── */
+let wanderOffX, wanderOffY;
+let wandererIdx, wanderAngle, wanderR, wanderSpd, wanderTimer, wanderState;
+let centroidX = 0, centroidY = 0, imageRadius = 100;
+
+let particleCount = 0;
+let currentImg    = null;
+
+/* ────────────────────────────────────────────────────────────
+   processImage
+   ──────────────────────────────────────────────────────────── */
+function processImage(img){
+  currentImg = img;
+  CELL = CELL_FOR[DENSITIES[densityIdx]];
+
+  const maxW   = W * 0.78;
+  const maxH   = H * 0.86;
+  const scale  = Math.min(maxW / img.width, maxH / img.height);
+  const targetW = Math.floor(img.width  * scale);
+  const targetH = Math.floor(img.height * scale);
+  const offsetX = Math.floor((W - targetW) / 2);
+  const offsetY = Math.floor((H - targetH) / 2);
+
+  const sampleW = Math.max(1, Math.floor(targetW / CELL));
+  const sampleH = Math.max(1, Math.floor(targetH / CELL));
+
+  const off  = document.createElement('canvas');
+  off.width  = sampleW; off.height = sampleH;
+  const octx = off.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(img, 0, 0, sampleW, sampleH);
+  const data = octx.getImageData(0, 0, sampleW, sampleH).data;
+
+  const tx = [], ty = [], tb = [];
+  for (let y = 0; y < sampleH; y++){
+    for (let x = 0; x < sampleW; x++){
+      const i = (y * sampleW + x) * 4;
+      let lum = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+      lum = Math.pow(lum/255, 0.82) * 255;
+      if (invert) lum = 255 - lum;
+      const bxv = BAYER[(y & 3)*4 + (x & 3)] * 16;
+      if (lum > bxv && lum > 28){
+        tx.push(offsetX + x*CELL + CELL*0.5);
+        ty.push(offsetY + y*CELL + CELL*0.5);
+        tb.push(lum / 255);
+      }
+    }
+  }
+
+  particleCount = tx.length;
+
+  if (particleCount > MAX_PARTICLES && densityIdx < DENSITIES.length - 1){
+    densityIdx++;
+    const btn = document.getElementById('density');
+    if (btn) btn.textContent = `[ DENSITY ▪ ${DENSITIES[densityIdx]} ]`;
+    return processImage(img);
+  }
+
+  /* allocate arrays */
+  originX  = new Float32Array(particleCount);
+  originY  = new Float32Array(particleCount);
+  posX     = new Float32Array(particleCount);
+  posY     = new Float32Array(particleCount);
+  velX     = new Float32Array(particleCount);
+  velY     = new Float32Array(particleCount);
+
+  freqA = new Float32Array(particleCount); freqB = new Float32Array(particleCount);
+  freqC = new Float32Array(particleCount);
+  phaseA= new Float32Array(particleCount); phaseB= new Float32Array(particleCount);
+  phaseC= new Float32Array(particleCount);
+  ampX  = new Float32Array(particleCount); ampY  = new Float32Array(particleCount);
+  mass  = new Float32Array(particleCount); dampCoef = new Float32Array(particleCount);
+
+  charIdx    = new Uint8Array(particleCount);
+  colorIdx   = new Uint8Array(particleCount);
+  charAge    = new Uint16Array(particleCount);
+  charPeriod = new Uint8Array(particleCount);
+  colorAge   = new Uint16Array(particleCount);
+  colorPeriod= new Uint8Array(particleCount);
+
+  wanderOffX = new Float32Array(particleCount);
+  wanderOffY = new Float32Array(particleCount);
+
+  /* pre-allocate render buckets */
+  buckets    = Array.from({length: NCOLORS}, ()=> new Int32Array(particleCount));
+  bucketLen  = new Int32Array(NCOLORS);
+
+  for (let i = 0; i < particleCount; i++){
+    originX[i] = tx[i]; originY[i] = ty[i];
+    posX[i]    = tx[i]; posY[i]    = ty[i];
+
+    freqA[i]  = 0.22 + Math.random() * 0.88;
+    freqB[i]  = 0.07 + Math.random() * 0.38;
+    freqC[i]  = 0.01 + Math.random() * 0.07;
+    phaseA[i] = Math.random() * TWO_PI;
+    phaseB[i] = Math.random() * TWO_PI;
+    phaseC[i] = Math.random() * TWO_PI;
+
+    /* amplitude — enough drift to feel alive without losing glyph readability */
+    const aBase = 0.8 + Math.random() * Math.random() * 4.0;
+    ampX[i]    = aBase * (0.60 + Math.random() * 0.80);
+    ampY[i]    = aBase * (0.60 + Math.random() * 0.80);
+    mass[i]    = 0.40 + Math.random() * Math.random() * 1.6;
+    dampCoef[i]= 0.76 + Math.random() * 0.10;
+
+    /* glyph state */
+    charIdx[i]    = (Math.random() * NCHARS) | 0;
+    colorIdx[i]   = (Math.random() * NCOLORS) | 0;
+    charPeriod[i] = 4  + (Math.random() * 20) | 0;
+    colorPeriod[i]= 25 + (Math.random() * 95) | 0;
+    charAge[i]    = (Math.random() * charPeriod[i]) | 0;
+    colorAge[i]   = (Math.random() * colorPeriod[i]) | 0;
+  }
+
+  /* centroid + image radius */
+  centroidX = 0; centroidY = 0;
+  for (let i = 0; i < particleCount; i++){
+    centroidX += originX[i]; centroidY += originY[i];
+  }
+  centroidX /= particleCount; centroidY /= particleCount;
+  let maxD2 = 0;
+  for (let i = 0; i < particleCount; i++){
+    const dx = originX[i]-centroidX, dy = originY[i]-centroidY;
+    const d2 = dx*dx + dy*dy;
+    if (d2 > maxD2) maxD2 = d2;
+  }
+  imageRadius = Math.sqrt(maxD2) * 1.2;
+
+  /* wanderer setup */
+  const nW = Math.max(12, Math.min(45, Math.floor(particleCount * 0.003)));
+  wandererIdx  = new Int32Array(nW);
+  wanderAngle  = new Float32Array(nW);
+  wanderR      = new Float32Array(nW);
+  wanderSpd    = new Float32Array(nW);
+  wanderTimer  = new Float32Array(nW);
+  wanderState  = new Uint8Array(nW);
+  for (let w = 0; w < nW; w++){
+    wandererIdx[w] = Math.floor((w / nW) * particleCount);
+    wanderAngle[w] = (w / nW) * TWO_PI + Math.random() * 0.5;
+    wanderR[w]     = imageRadius * (0.65 + Math.random() * 0.70);
+    wanderSpd[w]   = (0.6 + Math.random() * 1.4) * (Math.random() < 0.5 ? 1 : -1);
+    wanderTimer[w] = Math.random() * 2.5;
+    wanderState[w] = 0;
+  }
+
+  document.getElementById('particles').textContent = particleCount.toLocaleString();
+  setStatus('SIGNAL ACQUIRED');
+}
+
+function setStatus(s){
+  const el = document.getElementById('status');
+  el.textContent = s;
+  el.classList.remove('shake');
+  void el.offsetWidth;
+  el.classList.add('shake');
+}
+
+/* ────────────────────────────────────────────────────────────
+   RENDER LOOP
+   ──────────────────────────────────────────────────────────── */
+let lastFps  = performance.now();
+let fpsCount = 0;
+let prevT    = 0;
+let frameN   = 0;
+
+const FORCE_R  = 160, FORCE_R2 = FORCE_R * FORCE_R;
+/* cursor glow proximity radius (used for displacement, not glow here) */
+const PUSH_R   = 130, PUSH_R2  = PUSH_R  * PUSH_R;
+
+function tick(t){
+  const dt = prevT > 0 ? Math.min((t - prevT) * 0.001, 0.05) : 0.016;
+  prevT = t;
+  frameN++;
+
+  fpsCount++;
+  if (t - lastFps > 500){
+    document.getElementById('fps').textContent =
+      Math.round(fpsCount * 1000 / (t - lastFps)) + ' FPS';
+    fpsCount = 0; lastFps = t;
+  }
+
+  /* clear with mild fade — short trail on moving glyphs, no persistent glow */
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(0,0,0,0.58)';
+  ctx.fillRect(0, 0, W, H);
+
+  if (particleCount > 0){
+    const time    = t * 0.001;
+    const reactOn = reactive && mouse.active;
+
+    /* field breathing */
+    const breathe = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(time * 0.26));
+
+    /* idle twitches */
+    const twitchN = 4 + ((particleCount / 3000) | 0);
+    for (let k = 0; k < twitchN; k++){
+      const idx = (Math.random() * particleCount) | 0;
+      velX[idx] += (Math.random() - 0.5) * 1.2;
+      velY[idx] += (Math.random() - 0.5) * 1.2;
+    }
+
+    /* ── wanderer update ── */
+    if (wandererIdx){
+      const nW = wandererIdx.length;
+      for (let w = 0; w < nW; w++){
+        wanderTimer[w] -= dt;
+        const pidx = wandererIdx[w];
+        if (wanderTimer[w] <= 0){
+          if (wanderState[w] === 1){
+            wanderState[w] = 0;
+            wanderTimer[w] = 1.0 + Math.random() * 1.4;
+          } else {
+            const d2 = wanderOffX[pidx]*wanderOffX[pidx] + wanderOffY[pidx]*wanderOffY[pidx];
+            if (d2 < 16){
+              wanderState[w] = 1;
+              wanderTimer[w] = 1.8 + Math.random() * 2.8;
+              wanderR[w]   = imageRadius * (0.60 + Math.random() * 0.75);
+              wanderSpd[w] = (0.7 + Math.random() * 1.6) * (Math.random() < 0.5 ? 1 : -1);
+            } else {
+              wanderTimer[w] = 0.25;
+            }
+          }
+        }
+        if (wanderState[w] === 1){
+          let spd = wanderSpd[w];
+          if (reactOn){
+            const cx = posX[pidx]-mouse.x, cy = posY[pidx]-mouse.y;
+            if (cx*cx + cy*cy < 200*200) spd *= 2.2;
+          }
+          wanderAngle[w] += spd * dt;
+          const tX = centroidX + Math.cos(wanderAngle[w]) * wanderR[w];
+          const tY = centroidY + Math.sin(wanderAngle[w]) * wanderR[w];
+          const blend = Math.min(1, dt * 3.0);
+          wanderOffX[pidx] += (tX - originX[pidx] - wanderOffX[pidx]) * blend;
+          wanderOffY[pidx] += (tY - originY[pidx] - wanderOffY[pidx]) * blend;
+          const ang2 = wanderAngle[w] + Math.PI * 0.5 * Math.sign(wanderSpd[w]);
+          velX[pidx] += Math.cos(ang2) * 0.40;
+          velY[pidx] += Math.sin(ang2) * 0.40;
+        } else {
+          const decay = Math.pow(0.82, dt * 60);
+          wanderOffX[pidx] *= decay;
+          wanderOffY[pidx] *= decay;
+        }
+      }
+    }
+
+    /* ── main physics + glyph state update ── */
+    for (let i = 0; i < particleCount; i++){
+      const fa = freqA[i], fb = freqB[i], fc = freqC[i];
+      const pa = phaseA[i], pb = phaseB[i], pc = phaseC[i];
+      const ax = ampX[i] * breathe;
+      const ay = ampY[i] * breathe;
+
+      const dx0 = Math.sin(time*fa + pa)*ax + Math.sin(time*fb + pb)*ax*0.40 + Math.sin(time*fc + pc)*ax*0.22;
+      const dy0 = Math.cos(time*fa*0.87 + pa)*ay + Math.cos(time*fb + pb*0.72)*ay*0.40 + Math.cos(time*fc*0.95 + pc)*ay*0.22;
+
+      const ox = originX[i] + dx0 + wanderOffX[i];
+      const oy = originY[i] + dy0 + wanderOffY[i];
+
+      let fx = 0, fy = 0;
+      if (reactOn){
+        const cx = posX[i]-mouse.x, cy = posY[i]-mouse.y;
+        const d2 = cx*cx + cy*cy;
+        if (d2 < FORCE_R2 && d2 > 0.5){
+          const d    = Math.sqrt(d2);
+          const fall = 1 - d / FORCE_R;
+          const f    = fall * fall * 6.5 * mass[i];
+          const ang  = Math.atan2(cy, cx) + (pa - Math.PI)*0.10 + (mass[i]-1.0)*0.45;
+          fx = Math.cos(ang) * f;
+          fy = Math.sin(ang) * f;
+        }
+      }
+
+      velX[i] = (velX[i] + (ox - posX[i])*0.10 + fx) * dampCoef[i];
+      velY[i] = (velY[i] + (oy - posY[i])*0.10 + fy) * dampCoef[i];
+      posX[i] += velX[i];
+      posY[i] += velY[i];
+
+      /* ── glyph cycling ── */
+      charAge[i]++;
+      if (charAge[i] >= charPeriod[i]){
+        charIdx[i]  = (Math.random() * NCHARS) | 0;
+        charAge[i]  = 0;
+        /* occasionally re-roll the period so rhythm stays irregular */
+        if (Math.random() < 0.25) charPeriod[i] = 4 + (Math.random() * 20) | 0;
+      }
+
+      colorAge[i]++;
+      if (colorAge[i] >= colorPeriod[i]){
+        colorIdx[i]  = (Math.random() * NCOLORS) | 0;
+        colorAge[i]  = 0;
+        if (Math.random() < 0.20) colorPeriod[i] = 25 + (Math.random() * 95) | 0;
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════
+       RENDER — batch by color to minimise fillStyle changes.
+       No glow, no additive blending — flat square character cells.
+       ════════════════════════════════════════════════════════ */
+
+    /* reset buckets */
+    for (let c = 0; c < NCOLORS; c++) bucketLen[c] = 0;
+    for (let i = 0; i < particleCount; i++){
+      const c = colorIdx[i];
+      buckets[c][bucketLen[c]++] = i;
+    }
+
+    /* set font once — VT323 gives the chunky retro terminal look */
+    const fontSize = Math.ceil(CELL * 1.12);
+    ctx.font = `${fontSize}px VT323`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign    = 'center';
+
+    /* draw each color bucket — shadowBlur adds a soft radial glow per glyph */
+    ctx.shadowBlur = 7;
+    for (let c = 0; c < NCOLORS; c++){
+      const bl  = bucketLen[c];
+      if (bl === 0) continue;
+      ctx.fillStyle   = PALETTE[c];
+      ctx.shadowColor = PALETTE[c];
+      const bkt = buckets[c];
+      for (let k = 0; k < bl; k++){
+        const i = bkt[k];
+        ctx.fillText(CHARS[charIdx[i]], posX[i], posY[i]);
+      }
+    }
+    ctx.shadowBlur = 0;
+
+    /* ── wanderer override: render displaced wanderers in a bright
+       accent color so they read as rogue glyphs tearing through
+       the field. We draw them last so they're on top.            */
+    if (wandererIdx){
+      const nW = wandererIdx.length;
+      for (let w = 0; w < nW; w++){
+        const i   = wandererIdx[w];
+        const oMag2 = wanderOffX[i]*wanderOffX[i] + wanderOffY[i]*wanderOffY[i];
+        if (oMag2 > 9){
+          const wColor = (w & 1) ? '#DDFF44' : '#AAFFEE';
+          ctx.fillStyle   = wColor;
+          ctx.shadowColor = wColor;
+          ctx.shadowBlur  = 14;
+          ctx.fillText(CHARS[charIdx[i]], posX[i], posY[i]);
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ── file input ── */
+const dz       = document.getElementById('dropzone');
+const fileInput= document.getElementById('file');
+const intake   = document.getElementById('intake');
+const controls = document.getElementById('controls');
+
+['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev=>{
+  ev.preventDefault(); ev.stopPropagation(); dz.classList.add('drag');
+}));
+['dragleave','drop'].forEach(e => dz.addEventListener(e, ev=>{
+  ev.preventDefault(); ev.stopPropagation(); dz.classList.remove('drag');
+}));
+dz.addEventListener('drop', ev=>{
+  if (ev.dataTransfer && ev.dataTransfer.files[0]) handleFile(ev.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', ev=>{
+  if (ev.target.files[0]) handleFile(ev.target.files[0]);
+});
+window.addEventListener('paste', ev=>{
+  if (!ev.clipboardData) return;
+  for (let it of ev.clipboardData.items){
+    if (it.type && it.type.startsWith('image/')){
+      const f = it.getAsFile();
+      if (f){ handleFile(f); break; }
+    }
+  }
+});
+
+async function handleFile(file){
+  setStatus('DECODING…');
+  try {
+    if (!file) throw new Error('NO FILE');
+    const name = (file.name||'').toLowerCase();
+    const type = (file.type||'').toLowerCase();
+    if (/\.(heic|heif)$/i.test(name)||/heic|heif/.test(type)) throw new Error('HEIC NOT DECODABLE // EXPORT AS JPG');
+    if (type && !type.startsWith('image/')) throw new Error(`NOT AN IMAGE // ${type.toUpperCase()}`);
+    if (file.size > 40*1024*1024) throw new Error('FILE > 40MB // TOO LARGE');
+
+    let source = null;
+    if ('createImageBitmap' in window){
+      try { source = await createImageBitmap(file); } catch(e){ console.warn('createImageBitmap failed:', e); }
+    }
+    if (!source){
+      source = await new Promise((resolve,reject)=>{
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        const cleanup = ()=> URL.revokeObjectURL(url);
+        img.onload  = ()=>{ cleanup(); resolve(img); };
+        img.onerror = ()=>{ cleanup(); reject(new Error('DECODE FAIL // FORMAT NOT SUPPORTED')); };
+        img.src = url;
+      });
+    }
+    if (!source.width || !source.height) throw new Error('ZERO DIMENSIONS // CORRUPT FILE');
+
+    intake.classList.add('hidden');
+    controls.classList.remove('hidden');
+    processImage(source);
+  } catch(err){
+    console.error('[glyph]', err);
+    setStatus(err.message || 'DECODE FAIL');
+  }
+}
+
+/* ── controls ── */
+document.getElementById('reload').addEventListener('click', ()=>{
+  intake.classList.remove('hidden');
+  controls.classList.add('hidden');
+  particleCount = 0; currentImg = null;
+  document.getElementById('particles').textContent = '0';
+  setStatus('AWAITING SIGNAL');
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+});
+
+document.getElementById('density').addEventListener('click', e=>{
+  densityIdx = (densityIdx + 1) % DENSITIES.length;
+  e.currentTarget.textContent = `[ DENSITY ▪ ${DENSITIES[densityIdx]} ]`;
+  if (currentImg) processImage(currentImg);
+});
+
+document.getElementById('charset').addEventListener('click', e=>{
+  charsetIdx = (charsetIdx + 1) % CHARSET_KEYS.length;
+  const key  = CHARSET_KEYS[charsetIdx];
+  CHARS  = CHARSETS[key];
+  NCHARS = CHARS.length;
+  e.currentTarget.textContent = `[ CHARSET ▪ ${key} ]`;
+  /* randomise all current chars to the new set */
+  if (charIdx) for (let i = 0; i < particleCount; i++) charIdx[i] = (Math.random() * NCHARS) | 0;
+});
+
+document.getElementById('reactive').addEventListener('click', e=>{
+  reactive = !reactive;
+  e.currentTarget.textContent = `[ REACTIVE ▪ ${reactive ? 'ON' : 'OFF'} ]`;
+});
+
+document.getElementById('invert').addEventListener('click', e=>{
+  invert = !invert;
+  e.currentTarget.textContent = `[ POLARITY ▪ ${invert ? '−' : '+'} ]`;
+  if (currentImg) processImage(currentImg);
+});
+
+document.getElementById('save').addEventListener('click', ()=>{
+  const exp = document.createElement('canvas');
+  exp.width = canvas.width; exp.height = canvas.height;
+  const ec = exp.getContext('2d');
+  ec.fillStyle = '#000'; ec.fillRect(0,0,exp.width,exp.height);
+  ec.drawImage(canvas, 0, 0);
+  const link = document.createElement('a');
+  link.download = `glyph_${Date.now()}.png`;
+  link.href = exp.toDataURL('image/png');
+  link.click();
+});
+
+/* ── boot fade ── */
+setTimeout(()=>{
+  const boot = document.getElementById('boot');
+  boot.style.transition = 'opacity .5s';
+  boot.style.opacity = '0';
+  setTimeout(()=> boot.classList.add('gone'), 600);
+}, 2000);
+
+document.getElementById('density').textContent = `[ DENSITY ▪ ${DENSITIES[densityIdx]} ]`;
+resize();
+</script>
+</body>
+</html>
