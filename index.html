@@ -225,6 +225,114 @@
   .boot .warn{ color:#ffd76b; text-shadow:0 0 6px #ffd76b; }
   .boot .dim { opacity:0.5; }
 
+  /* ── side panel ── */
+  .panel-tab{
+    position:fixed; right:0; top:50%; transform:translateY(-50%);
+    z-index:300; background:rgba(0,8,8,0.88);
+    border:1px solid var(--prime-dim); border-right:none;
+    color:var(--prime); font-family:'JetBrains Mono',monospace;
+    font-size:8.5px; letter-spacing:0.22em; writing-mode:vertical-rl;
+    padding:18px 8px; cursor:pointer;
+    text-shadow:0 0 6px var(--prime); transition:all .2s;
+    backdrop-filter:blur(4px);
+  }
+  .panel-tab:hover{
+    background:rgba(0,50,50,0.9); border-color:var(--prime);
+    box-shadow:-4px 0 20px rgba(0,255,255,0.2); color:var(--prime-soft);
+  }
+  .panel-tab.open{ right:290px; }
+  .side-panel{
+    position:fixed; right:0; top:0; bottom:0; width:290px; z-index:291;
+    background:rgba(0,6,6,0.96); border-left:1px solid var(--prime-dim);
+    backdrop-filter:blur(10px); display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+    font-family:'JetBrains Mono',monospace;
+  }
+  .side-panel.open{ transform:translateX(0); }
+  .sp-header{
+    padding:14px 16px 10px; border-bottom:1px solid rgba(0,255,255,0.12);
+    display:flex; justify-content:space-between; align-items:center; flex-shrink:0;
+  }
+  .sp-header-title{ font-size:9.5px; letter-spacing:0.35em; text-shadow:0 0 8px var(--prime); }
+  .sp-close{ cursor:pointer; opacity:0.5; font-size:15px; line-height:1; transition:opacity .15s; }
+  .sp-close:hover{ opacity:1; }
+  .sp-body{
+    flex:1; overflow-y:auto; padding:8px 0 16px;
+    scrollbar-width:thin; scrollbar-color:var(--prime-dim) transparent;
+  }
+  .sp-body::-webkit-scrollbar{ width:3px; }
+  .sp-body::-webkit-scrollbar-thumb{ background:var(--prime-dim); border-radius:0; }
+  .sp-sec{ padding-bottom:6px; border-bottom:1px solid rgba(0,255,255,0.05); margin-bottom:2px; }
+  .sp-sec-title{
+    padding:8px 16px 5px; font-size:8px; letter-spacing:0.4em;
+    color:var(--prime-dim); text-transform:uppercase; opacity:0.85;
+  }
+  .sp-row{ padding:3px 16px; display:flex; align-items:center; gap:8px; }
+  .sp-lbl{ font-size:8px; letter-spacing:0.15em; color:var(--prime); opacity:0.70; min-width:84px; flex-shrink:0; text-transform:uppercase; }
+  .sp-val{ font-size:8px; letter-spacing:0.1em; color:var(--prime-soft); min-width:36px; text-align:right; flex-shrink:0; }
+  input[type=range]{
+    -webkit-appearance:none; flex:1; height:2px;
+    background:rgba(0,255,255,0.12); outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:9px; height:9px;
+    background:var(--prime); border-radius:0;
+    box-shadow:0 0 5px var(--prime); cursor:pointer;
+  }
+  input[type=range]:hover::-webkit-slider-thumb{ background:var(--prime-soft); box-shadow:0 0 10px var(--prime); }
+  input[type=range]::-moz-range-thumb{
+    width:9px; height:9px; background:var(--prime);
+    border:none; border-radius:0; box-shadow:0 0 5px var(--prime); cursor:pointer;
+  }
+  .sp-tog-row{ padding:4px 16px; display:flex; align-items:center; gap:10px; }
+  .tog-sw{ position:relative; width:28px; height:13px; flex-shrink:0; cursor:pointer; }
+  .tog-sw input{ display:none; }
+  .tog-track{
+    position:absolute; inset:0;
+    background:rgba(0,255,255,0.08); border:1px solid var(--prime-dim);
+    transition:background .15s, border-color .15s;
+  }
+  .tog-thumb{
+    position:absolute; top:1px; left:1px; width:9px; height:9px;
+    background:var(--prime-dim); transition:transform .15s, background .15s;
+  }
+  .tog-sw input:checked ~ .tog-track{ background:rgba(0,255,255,0.20); border-color:var(--prime); }
+  .tog-sw input:checked ~ .tog-thumb{ transform:translateX(15px); background:var(--prime); box-shadow:0 0 6px var(--prime); }
+  .sp-btn{
+    display:block; width:calc(100% - 32px); margin:4px 16px;
+    background:rgba(0,8,8,0.6); border:1px solid var(--prime-dim);
+    color:var(--prime); padding:7px 12px;
+    font-family:'JetBrains Mono',monospace; font-size:8px; font-weight:500;
+    letter-spacing:0.2em; cursor:pointer; text-shadow:0 0 5px var(--prime);
+    transition:all .15s; text-transform:uppercase; text-align:left;
+  }
+  .sp-btn:hover{
+    border-color:var(--prime); background:rgba(0,60,60,0.45);
+    box-shadow:0 0 14px rgba(0,255,255,0.3); color:var(--prime-soft);
+  }
+  .sp-btn:active{ transform:translateY(1px); }
+  .sp-btn.recording{
+    border-color:#ff4444; color:#ff6666;
+    text-shadow:0 0 8px #ff4444; box-shadow:0 0 18px rgba(255,60,60,0.4);
+    animation:rec 1.4s infinite;
+  }
+  .sp-density-row{ padding:3px 16px; display:flex; align-items:center; gap:8px; }
+  .density-opt{
+    flex:1; text-align:center; padding:5px 0;
+    border:1px solid rgba(0,255,255,0.18); font-family:'JetBrains Mono',monospace;
+    font-size:7.5px; letter-spacing:0.2em; cursor:pointer; color:var(--prime);
+    opacity:0.45; transition:all .15s;
+  }
+  .density-opt.active{ opacity:1; border-color:var(--prime); background:rgba(0,50,50,0.4); box-shadow:0 0 8px rgba(0,255,255,0.25); }
+  .density-opt:hover:not(.active){ opacity:0.75; border-color:var(--prime-dim); }
+  #rec-countdown{
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:500; pointer-events:none;
+    font-family:'VT323',monospace; font-size:clamp(48px,12vw,96px);
+    color:#ff4444; text-shadow:0 0 30px #ff4444, 0 0 60px rgba(255,60,60,0.5);
+    letter-spacing:0.1em; opacity:0; transition:opacity .3s;
+  }
+  #rec-countdown.show{ opacity:1; }
   @media (max-width: 720px){
     .brand,.ticks{ display:none; }
     .hud-top,.hud-bottom{ font-size:9px; letter-spacing:0.1em; gap:8px; left:12px; right:12px; }
@@ -240,6 +348,100 @@
 </style>
 </head>
 <body>
+
+<div id="rec-countdown"></div>
+<button class="panel-tab" id="panelTab">▶ CONTROLS</button>
+
+<div class="side-panel" id="sidePanel">
+  <div class="sp-header">
+    <span class="sp-header-title">⬡ GLYPH PARAMETERS</span>
+    <span class="sp-close" id="spClose">✕</span>
+  </div>
+  <div class="sp-body">
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ RENDER</div>
+      <div class="sp-row"><span class="sp-lbl">TRAIL FADE</span><input type="range" id="p-fade" min="0.05" max="0.98" step="0.01" value="0.58"><span class="sp-val" id="v-fade">0.58</span></div>
+      <div class="sp-row"><span class="sp-lbl">GLYPH SIZE</span><input type="range" id="p-size" min="0.4" max="2.5" step="0.05" value="1.12"><span class="sp-val" id="v-size">1.12</span></div>
+      <div class="sp-row"><span class="sp-lbl">GLOW BLUR</span><input type="range" id="p-glow" min="0" max="30" step="0.5" value="7"><span class="sp-val" id="v-glow">7</span></div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ GLYPHS</div>
+      <div class="sp-row"><span class="sp-lbl">CHAR SPEED</span><input type="range" id="p-chspd" min="0.1" max="8.0" step="0.1" value="1.0"><span class="sp-val" id="v-chspd">1.00</span></div>
+      <div class="sp-row"><span class="sp-lbl">COLOR SPEED</span><input type="range" id="p-cospd" min="0.1" max="8.0" step="0.1" value="1.0"><span class="sp-val" id="v-cospd">1.00</span></div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ MOTION</div>
+      <div class="sp-row"><span class="sp-lbl">AMPLITUDE</span><input type="range" id="p-amp" min="0.0" max="5.0" step="0.05" value="1.0"><span class="sp-val" id="v-amp">1.00</span></div>
+      <div class="sp-row"><span class="sp-lbl">BREATHE SPD</span><input type="range" id="p-breathe" min="0.02" max="2.0" step="0.02" value="0.26"><span class="sp-val" id="v-breathe">0.26</span></div>
+      <div class="sp-row"><span class="sp-lbl">TWITCH RATE</span><input type="range" id="p-twitch" min="0" max="40" step="1" value="4"><span class="sp-val" id="v-twitch">4</span></div>
+      <div class="sp-row"><span class="sp-lbl">TWITCH STR</span><input type="range" id="p-tstr" min="0" max="8.0" step="0.1" value="1.2"><span class="sp-val" id="v-tstr">1.2</span></div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ CURSOR</div>
+      <div class="sp-row"><span class="sp-lbl">FORCE RADIUS</span><input type="range" id="p-forcer" min="20" max="500" step="5" value="160"><span class="sp-val" id="v-forcer">160</span></div>
+      <div class="sp-row"><span class="sp-lbl">FORCE STR</span><input type="range" id="p-forces" min="0" max="30" step="0.5" value="6.5"><span class="sp-val" id="v-forces">6.5</span></div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ WANDERERS</div>
+      <div class="sp-row"><span class="sp-lbl">SPD MULT</span><input type="range" id="p-wspd" min="0.1" max="8.0" step="0.1" value="1.0"><span class="sp-val" id="v-wspd">1.00</span></div>
+      <div class="sp-row"><span class="sp-lbl">IMPULSE</span><input type="range" id="p-wimp" min="0" max="3.0" step="0.05" value="0.40"><span class="sp-val" id="v-wimp">0.40</span></div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ DISPLAY</div>
+      <div class="sp-row"><span class="sp-lbl">SCANLINES</span><input type="range" id="p-scan" min="0" max="1" step="0.01" value="1"><span class="sp-val" id="v-scan">1.00</span></div>
+      <div class="sp-row"><span class="sp-lbl">VIGNETTE</span><input type="range" id="p-vig" min="0" max="1" step="0.01" value="1"><span class="sp-val" id="v-vig">1.00</span></div>
+      <div class="sp-row"><span class="sp-lbl">FLICKER</span><input type="range" id="p-flick" min="0" max="1" step="0.01" value="1"><span class="sp-val" id="v-flick">1.00</span></div>
+      <div class="sp-row"><span class="sp-lbl">HUE SHIFT</span><input type="range" id="p-hue" min="0" max="359" step="1" value="0"><span class="sp-val" id="v-hue">0°</span></div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ TOGGLES</div>
+      <div class="sp-tog-row">
+        <span class="sp-lbl">REACTIVE</span>
+        <label class="tog-sw"><input type="checkbox" id="t-react" checked><div class="tog-track"></div><div class="tog-thumb"></div></label>
+      </div>
+      <div class="sp-tog-row">
+        <span class="sp-lbl">INVERT</span>
+        <label class="tog-sw"><input type="checkbox" id="t-invert"><div class="tog-track"></div><div class="tog-thumb"></div></label>
+      </div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ CHARSET</div>
+      <div class="sp-density-row">
+        <div class="density-opt active" data-cs="0">ALL</div>
+        <div class="density-opt" data-cs="1">ALPHA</div>
+        <div class="density-opt" data-cs="2">NUMS</div>
+        <div class="density-opt" data-cs="3">SYM</div>
+      </div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ DENSITY</div>
+      <div class="sp-density-row">
+        <div class="density-opt active" data-d="0">HIGH</div>
+        <div class="density-opt" data-d="1">MED</div>
+        <div class="density-opt" data-d="2">LOW</div>
+      </div>
+    </div>
+
+    <div class="sp-sec">
+      <div class="sp-sec-title">▸ ACTIONS</div>
+      <button class="sp-btn" id="sp-newimg">[ NEW IMAGE ]</button>
+      <button class="sp-btn" id="sp-export">[ EXPORT FRAME ]</button>
+      <div class="sp-row" style="margin-top:4px"><span class="sp-lbl">REC DURATION</span><input type="range" id="p-recdur" min="3" max="30" step="1" value="6"><span class="sp-val" id="v-recdur">6s</span></div>
+      <button class="sp-btn" id="sp-record">[ ● REC MP4 ]</button>
+      <button class="sp-btn" id="sp-reset">[ RESET DEFAULTS ]</button>
+    </div>
+
+  </div>
+</div>
 
 <div class="boot" id="boot">
   <div class="ln" style="animation-delay:0ms">GLYPH-OS v1.0.0426 — RASTER_MATRIX // (c) PRIVATE BAND ◉ 2026</div>
@@ -568,9 +770,17 @@ let fpsCount = 0;
 let prevT    = 0;
 let frameN   = 0;
 
-const FORCE_R  = 160, FORCE_R2 = FORCE_R * FORCE_R;
-/* cursor glow proximity radius (used for displacement, not glow here) */
-const PUSH_R   = 130, PUSH_R2  = PUSH_R  * PUSH_R;
+let FORCE_R  = 160, FORCE_R2 = FORCE_R * FORCE_R;
+const PUSH_R = 130, PUSH_R2  = PUSH_R  * PUSH_R;
+
+const DEFAULTS = {
+  fadeAlpha:0.58, sizeScale:1.12, glowBlur:7,
+  charSpd:1.0, colorSpd:1.0,
+  ampMult:1.0, breatheSpd:0.26, twitchBase:4, twitchStr:1.2,
+  forceR:160, forceStr:6.5,
+  wanderSpdMult:1.0, wanderImpulse:0.40,
+};
+const cfg = Object.assign({}, DEFAULTS);
 
 function tick(t){
   const dt = prevT > 0 ? Math.min((t - prevT) * 0.001, 0.05) : 0.016;
@@ -586,7 +796,7 @@ function tick(t){
 
   /* clear with mild fade — short trail on moving glyphs, no persistent glow */
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = 'rgba(0,0,0,0.58)';
+  ctx.fillStyle = `rgba(0,0,0,${cfg.fadeAlpha})`;
   ctx.fillRect(0, 0, W, H);
 
   if (particleCount > 0){
@@ -594,14 +804,14 @@ function tick(t){
     const reactOn = reactive && mouse.active;
 
     /* field breathing */
-    const breathe = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(time * 0.26));
+    const breathe = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(time * cfg.breatheSpd));
 
     /* idle twitches */
-    const twitchN = 4 + ((particleCount / 3000) | 0);
+    const twitchN = cfg.twitchBase + ((particleCount / 3000) | 0);
     for (let k = 0; k < twitchN; k++){
       const idx = (Math.random() * particleCount) | 0;
-      velX[idx] += (Math.random() - 0.5) * 1.2;
-      velY[idx] += (Math.random() - 0.5) * 1.2;
+      velX[idx] += (Math.random() - 0.5) * cfg.twitchStr;
+      velY[idx] += (Math.random() - 0.5) * cfg.twitchStr;
     }
 
     /* ── wanderer update ── */
@@ -627,7 +837,7 @@ function tick(t){
           }
         }
         if (wanderState[w] === 1){
-          let spd = wanderSpd[w];
+          let spd = wanderSpd[w] * cfg.wanderSpdMult;
           if (reactOn){
             const cx = posX[pidx]-mouse.x, cy = posY[pidx]-mouse.y;
             if (cx*cx + cy*cy < 200*200) spd *= 2.2;
@@ -639,8 +849,8 @@ function tick(t){
           wanderOffX[pidx] += (tX - originX[pidx] - wanderOffX[pidx]) * blend;
           wanderOffY[pidx] += (tY - originY[pidx] - wanderOffY[pidx]) * blend;
           const ang2 = wanderAngle[w] + Math.PI * 0.5 * Math.sign(wanderSpd[w]);
-          velX[pidx] += Math.cos(ang2) * 0.40;
-          velY[pidx] += Math.sin(ang2) * 0.40;
+          velX[pidx] += Math.cos(ang2) * cfg.wanderImpulse;
+          velY[pidx] += Math.sin(ang2) * cfg.wanderImpulse;
         } else {
           const decay = Math.pow(0.82, dt * 60);
           wanderOffX[pidx] *= decay;
@@ -653,8 +863,8 @@ function tick(t){
     for (let i = 0; i < particleCount; i++){
       const fa = freqA[i], fb = freqB[i], fc = freqC[i];
       const pa = phaseA[i], pb = phaseB[i], pc = phaseC[i];
-      const ax = ampX[i] * breathe;
-      const ay = ampY[i] * breathe;
+      const ax = ampX[i] * breathe * cfg.ampMult;
+      const ay = ampY[i] * breathe * cfg.ampMult;
 
       const dx0 = Math.sin(time*fa + pa)*ax + Math.sin(time*fb + pb)*ax*0.40 + Math.sin(time*fc + pc)*ax*0.22;
       const dy0 = Math.cos(time*fa*0.87 + pa)*ay + Math.cos(time*fb + pb*0.72)*ay*0.40 + Math.cos(time*fc*0.95 + pc)*ay*0.22;
@@ -669,7 +879,7 @@ function tick(t){
         if (d2 < FORCE_R2 && d2 > 0.5){
           const d    = Math.sqrt(d2);
           const fall = 1 - d / FORCE_R;
-          const f    = fall * fall * 6.5 * mass[i];
+          const f    = fall * fall * cfg.forceStr * mass[i];
           const ang  = Math.atan2(cy, cx) + (pa - Math.PI)*0.10 + (mass[i]-1.0)*0.45;
           fx = Math.cos(ang) * f;
           fy = Math.sin(ang) * f;
@@ -683,15 +893,14 @@ function tick(t){
 
       /* ── glyph cycling ── */
       charAge[i]++;
-      if (charAge[i] >= charPeriod[i]){
+      if (charAge[i] >= Math.max(1, charPeriod[i] / cfg.charSpd)){
         charIdx[i]  = (Math.random() * NCHARS) | 0;
         charAge[i]  = 0;
-        /* occasionally re-roll the period so rhythm stays irregular */
         if (Math.random() < 0.25) charPeriod[i] = 4 + (Math.random() * 20) | 0;
       }
 
       colorAge[i]++;
-      if (colorAge[i] >= colorPeriod[i]){
+      if (colorAge[i] >= Math.max(1, colorPeriod[i] / cfg.colorSpd)){
         colorIdx[i]  = (Math.random() * NCOLORS) | 0;
         colorAge[i]  = 0;
         if (Math.random() < 0.20) colorPeriod[i] = 25 + (Math.random() * 95) | 0;
@@ -711,13 +920,13 @@ function tick(t){
     }
 
     /* set font once — VT323 gives the chunky retro terminal look */
-    const fontSize = Math.ceil(CELL * 1.12);
+    const fontSize = Math.ceil(CELL * cfg.sizeScale);
     ctx.font = `${fontSize}px VT323`;
     ctx.textBaseline = 'middle';
     ctx.textAlign    = 'center';
 
     /* draw each color bucket — shadowBlur adds a soft radial glow per glyph */
-    ctx.shadowBlur = 7;
+    ctx.shadowBlur = cfg.glowBlur;
     for (let c = 0; c < NCOLORS; c++){
       const bl  = bucketLen[c];
       if (bl === 0) continue;
@@ -879,6 +1088,231 @@ setTimeout(()=>{
 
 document.getElementById('density').textContent = `[ DENSITY ▪ ${DENSITIES[densityIdx]} ]`;
 resize();
+
+/* ════════════════════════════════════════════════════════════
+   SIDE PANEL + RECORDING
+   ════════════════════════════════════════════════════════════ */
+(function(){
+  const panel = document.getElementById('sidePanel');
+  const tab   = document.getElementById('panelTab');
+  const close = document.getElementById('spClose');
+
+  function openPanel(){ panel.classList.add('open'); tab.classList.add('open'); tab.textContent='◀ CONTROLS'; }
+  function closePanel(){ panel.classList.remove('open'); tab.classList.remove('open'); tab.textContent='▶ CONTROLS'; }
+  tab.addEventListener('click', ()=> panel.classList.contains('open') ? closePanel() : openPanel());
+  close.addEventListener('click', closePanel);
+
+  function bindSlider(id, valId, key, fmt, cb){
+    const sl = document.getElementById(id);
+    const vl = document.getElementById(valId);
+    sl.addEventListener('input', ()=>{
+      const v = parseFloat(sl.value);
+      if(key) cfg[key] = v;
+      vl.textContent = fmt ? fmt(v) : v.toFixed(2);
+      if(cb) cb(v);
+    });
+  }
+
+  /* RENDER */
+  bindSlider('p-fade',  'v-fade',  'fadeAlpha', v=>v.toFixed(2));
+  bindSlider('p-size',  'v-size',  'sizeScale', v=>v.toFixed(2));
+  bindSlider('p-glow',  'v-glow',  'glowBlur',  v=>Math.round(v).toString());
+
+  /* GLYPHS */
+  bindSlider('p-chspd', 'v-chspd', 'charSpd',  v=>v.toFixed(2));
+  bindSlider('p-cospd', 'v-cospd', 'colorSpd', v=>v.toFixed(2));
+
+  /* MOTION */
+  bindSlider('p-amp',    'v-amp',    'ampMult',   v=>v.toFixed(2));
+  bindSlider('p-breathe','v-breathe','breatheSpd',v=>v.toFixed(2));
+  bindSlider('p-twitch', 'v-twitch', 'twitchBase',v=>String(Math.round(v)));
+  bindSlider('p-tstr',   'v-tstr',   'twitchStr', v=>v.toFixed(1));
+
+  /* CURSOR */
+  const slForceR = document.getElementById('p-forcer');
+  const vForceR  = document.getElementById('v-forcer');
+  slForceR.addEventListener('input', ()=>{
+    FORCE_R = parseFloat(slForceR.value); FORCE_R2 = FORCE_R*FORCE_R;
+    cfg.forceR = FORCE_R; vForceR.textContent = Math.round(FORCE_R);
+  });
+  bindSlider('p-forces','v-forces','forceStr',v=>v.toFixed(1));
+
+  /* WANDERERS */
+  bindSlider('p-wspd','v-wspd','wanderSpdMult', v=>v.toFixed(2));
+  bindSlider('p-wimp','v-wimp','wanderImpulse', v=>v.toFixed(2));
+
+  /* DISPLAY */
+  const scanEl  = document.querySelector('.scanlines');
+  const vigEl   = document.querySelector('.vignette');
+  const flickEl = document.querySelector('.flicker');
+  bindSlider('p-scan',  'v-scan',  null, v=>v.toFixed(2), v=>{ scanEl.style.opacity = v; });
+  bindSlider('p-vig',   'v-vig',   null, v=>v.toFixed(2), v=>{ vigEl.style.opacity  = v; });
+  bindSlider('p-flick', 'v-flick', null, v=>v.toFixed(2), v=>{
+    if(v===0){ flickEl.style.animationPlayState='paused'; flickEl.style.opacity='0'; }
+    else { flickEl.style.animationPlayState='running'; flickEl.style.opacity=''; }
+  });
+  const hueSlider = document.getElementById('p-hue');
+  const hueVal    = document.getElementById('v-hue');
+  hueSlider.addEventListener('input', ()=>{
+    const deg = parseInt(hueSlider.value);
+    hueVal.textContent = deg + '°';
+    canvas.style.filter = deg > 0 ? `hue-rotate(${deg}deg)` : '';
+  });
+
+  /* TOGGLES */
+  document.getElementById('t-react').addEventListener('change', e=>{
+    reactive = e.target.checked;
+    document.getElementById('reactive').textContent = `[ REACTIVE ▪ ${reactive?'ON':'OFF'} ]`;
+  });
+  document.getElementById('t-invert').addEventListener('change', e=>{
+    invert = e.target.checked;
+    document.getElementById('invert').textContent = `[ POLARITY ▪ ${invert?'−':'+'} ]`;
+    if(currentImg) processImage(currentImg);
+  });
+
+  /* CHARSET BUTTONS */
+  const csOpts = document.querySelectorAll('[data-cs]');
+  csOpts.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = parseInt(btn.dataset.cs);
+      charsetIdx = idx;
+      const key = CHARSET_KEYS[idx];
+      CHARS = CHARSETS[key]; NCHARS = CHARS.length;
+      csOpts.forEach(b=>b.classList.toggle('active', parseInt(b.dataset.cs)===idx));
+      document.getElementById('charset').textContent = `[ CHARSET ▪ ${key} ]`;
+      if(charIdx) for(let i=0;i<particleCount;i++) charIdx[i]=(Math.random()*NCHARS)|0;
+    });
+  });
+
+  /* DENSITY BUTTONS */
+  const dOpts = document.querySelectorAll('[data-d]');
+  dOpts.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = parseInt(btn.dataset.d);
+      densityIdx = d;
+      dOpts.forEach(b=>b.classList.toggle('active', parseInt(b.dataset.d)===d));
+      document.getElementById('density').textContent=`[ DENSITY ▪ ${DENSITIES[densityIdx]} ]`;
+      if(currentImg) processImage(currentImg);
+    });
+  });
+
+  /* ACTIONS */
+  document.getElementById('sp-newimg').addEventListener('click', ()=>{
+    intake.classList.remove('hidden'); controls.classList.add('hidden');
+    particleCount=0; currentImg=null;
+    document.getElementById('particles').textContent='0';
+    setStatus('AWAITING SIGNAL');
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  });
+  document.getElementById('sp-export').addEventListener('click', ()=>{
+    const exp = document.createElement('canvas');
+    exp.width = canvas.width; exp.height = canvas.height;
+    const ec = exp.getContext('2d');
+    ec.fillStyle='#000'; ec.fillRect(0,0,exp.width,exp.height);
+    ec.drawImage(canvas,0,0);
+    const link=document.createElement('a');
+    link.download=`glyph_${Date.now()}.png`;
+    link.href=exp.toDataURL('image/png'); link.click();
+  });
+  document.getElementById('sp-reset').addEventListener('click', ()=>{
+    Object.assign(cfg, DEFAULTS);
+    FORCE_R=DEFAULTS.forceR; FORCE_R2=FORCE_R*FORCE_R;
+    const map={
+      'p-fade':cfg.fadeAlpha,'p-size':cfg.sizeScale,'p-glow':cfg.glowBlur,
+      'p-chspd':cfg.charSpd,'p-cospd':cfg.colorSpd,
+      'p-amp':cfg.ampMult,'p-breathe':cfg.breatheSpd,
+      'p-twitch':cfg.twitchBase,'p-tstr':cfg.twitchStr,
+      'p-forcer':cfg.forceR,'p-forces':cfg.forceStr,
+      'p-wspd':cfg.wanderSpdMult,'p-wimp':cfg.wanderImpulse,
+      'p-scan':1,'p-vig':1,'p-flick':1,'p-hue':0,
+    };
+    Object.entries(map).forEach(([id,val])=>{ const el=document.getElementById(id); if(el){ el.value=val; el.dispatchEvent(new Event('input')); } });
+  });
+
+  /* REC DURATION */
+  const recDurSlider = document.getElementById('p-recdur');
+  const recDurVal    = document.getElementById('v-recdur');
+  recDurSlider.addEventListener('input', ()=>{ recDurVal.textContent = recDurSlider.value + 's'; });
+
+  /* RECORD MP4 */
+  const recBtn     = document.getElementById('sp-record');
+  const recCountEl = document.getElementById('rec-countdown');
+  let mediaRecorder = null;
+  let recChunks = [];
+  let prerollActive = false;
+
+  recBtn.addEventListener('click', ()=>{
+    if(mediaRecorder && mediaRecorder.state==='recording'){ mediaRecorder.stop(); return; }
+    if(prerollActive){ prerollActive=false; return; }
+
+    const dur = parseInt(recDurSlider.value)*1000;
+    const mp4Types =['video/mp4;codecs=avc1','video/mp4'];
+    const webmTypes=['video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm'];
+    let mimeType='';
+    for(const t of [...mp4Types,...webmTypes]){ if(MediaRecorder.isTypeSupported(t)){mimeType=t;break;} }
+    const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+
+    /* 3-second pre-roll */
+    prerollActive=true;
+    recBtn.textContent='[ ✕ CANCEL ]';
+    setStatus('GET READY…');
+    let preCount=3;
+    recCountEl.textContent=preCount;
+    recCountEl.classList.add('show');
+    recCountEl.style.color='#ffdd44';
+    recCountEl.style.textShadow='0 0 30px #ffdd44, 0 0 60px rgba(255,220,60,0.5)';
+
+    const preInterval=setInterval(()=>{
+      if(!prerollActive){
+        clearInterval(preInterval); recCountEl.classList.remove('show');
+        recBtn.textContent=`[ ● REC ${ext.toUpperCase()} ]`; setStatus('SIGNAL ACQUIRED'); return;
+      }
+      preCount--;
+      if(preCount>0){
+        recCountEl.textContent=preCount;
+      } else {
+        clearInterval(preInterval);
+        if(!prerollActive) return;
+        prerollActive=false;
+        recCountEl.style.color='#ff4444';
+        recCountEl.style.textShadow='0 0 30px #ff4444, 0 0 60px rgba(255,60,60,0.5)';
+
+        const stream=canvas.captureStream(60);
+        const opts=mimeType?{mimeType,videoBitsPerSecond:12_000_000}:{};
+        try{ mediaRecorder=new MediaRecorder(stream,opts); }
+        catch(e){ mediaRecorder=new MediaRecorder(stream); }
+        recChunks=[];
+        mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) recChunks.push(e.data); };
+        mediaRecorder.onstop=()=>{
+          const blob=new Blob(recChunks,{type:mimeType||'video/webm'});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a');
+          a.download=`glyph_${Date.now()}.${ext}`; a.href=url; a.click();
+          setTimeout(()=>URL.revokeObjectURL(url),10000);
+          recBtn.textContent=`[ ● REC ${ext.toUpperCase()} ]`;
+          recBtn.classList.remove('recording');
+          recCountEl.classList.remove('show');
+          setStatus('EXPORT READY');
+        };
+        mediaRecorder.start(100);
+        recBtn.classList.add('recording');
+        recBtn.textContent='[ ■ STOP REC ]';
+        setStatus('● RECORDING');
+
+        const endTime=performance.now()+dur;
+        function updateRecCountdown(){
+          const left=Math.ceil((endTime-performance.now())/1000);
+          if(left>0&&mediaRecorder&&mediaRecorder.state==='recording'){
+            recCountEl.textContent=left+'s'; recCountEl.classList.add('show');
+            requestAnimationFrame(updateRecCountdown);
+          } else { recCountEl.classList.remove('show'); }
+        }
+        requestAnimationFrame(updateRecCountdown);
+        setTimeout(()=>{ if(mediaRecorder&&mediaRecorder.state==='recording') mediaRecorder.stop(); },dur);
+      }
+    },1000);
+  });
+})();
 </script>
 </body>
 </html>
