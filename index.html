@@ -513,15 +513,201 @@
 
 <script>
 /* ============================================================
-   GLYPH // ASCII PORTRAIT GENERATOR
+   GLYPH // ASCII PORTRAIT GENERATOR — WebGL GPU renderer
+   Texture atlas → point-sprite glyphs, 2 draw calls/frame
+   Same spring physics as CRT gen, glyph cycling on CPU
    ============================================================ */
 
 const canvas = document.getElementById('main');
-const ctx    = canvas.getContext('2d', { alpha: false });
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
 let W = 0, H = 0;
-
 const TWO_PI = Math.PI * 2;
+
+/* ── WebGL context ── */
+const gl = canvas.getContext('webgl', {
+  alpha: false,
+  antialias: false,
+  premultipliedAlpha: false,
+  preserveDrawingBuffer: true,
+});
+if(!gl) document.getElementById('status').textContent = 'WEBGL NOT SUPPORTED';
+
+/* ════════════════════════════════════════════════════════════
+   GLSL SHADERS
+   ════════════════════════════════════════════════════════════ */
+
+/* Fullscreen fade quad — phosphor persistence trail */
+const FADE_VS = `
+attribute vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }
+`;
+const FADE_FS = `
+precision mediump float;
+uniform float u_alpha;
+void main(){ gl_FragColor = vec4(0.0, 0.0, 0.0, u_alpha); }
+`;
+
+/* Glyph point sprites — samples texture atlas per character */
+const GLYPH_VS = `
+attribute vec2  a_pos;
+attribute float a_charIdx;
+attribute vec3  a_color;
+attribute float a_glow;
+
+uniform vec2  u_res;
+uniform float u_dpr;
+uniform float u_cellSize;
+uniform float u_sizeScale;
+
+varying float v_charIdx;
+varying vec3  v_color;
+varying float v_glow;
+
+void main(){
+  vec2 clip = (a_pos / u_res) * 2.0 - 1.0;
+  clip.y = -clip.y;
+  gl_Position  = vec4(clip, 0.0, 1.0);
+  gl_PointSize = clamp(u_cellSize * u_sizeScale * u_dpr, 3.0, 128.0);
+  v_charIdx = a_charIdx;
+  v_color   = a_color;
+  v_glow    = a_glow;
+}
+`;
+const GLYPH_FS = `
+precision mediump float;
+
+uniform sampler2D u_atlas;
+uniform vec2      u_atlasGrid;
+uniform float     u_glowBlur;
+
+varying float v_charIdx;
+varying vec3  v_color;
+varying float v_glow;
+
+void main(){
+  float col = mod(v_charIdx, u_atlasGrid.x);
+  float row = floor(v_charIdx / u_atlasGrid.x);
+
+  /* gl_PointCoord (0,0)=top-left; WebGL tex (0,0)=bottom-left → flip Y */
+  vec2 uv = (vec2(col, row) + vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y)) / u_atlasGrid;
+
+  float charA = texture2D(u_atlas, uv).r;
+  if(charA < 0.03) discard;
+
+  /* soft glow halo radiating out from character pixels */
+  float dist = length(gl_PointCoord - 0.5) * 2.0;
+  float halo = exp(-dist * dist * max(0.3, 12.0 / (u_glowBlur + 0.01)))
+               * (u_glowBlur / 18.0) * (charA + 0.3);
+
+  float wanderBoost = 1.0 + v_glow * 2.2;
+  vec3  col3  = v_color * (charA + halo) * wanderBoost;
+  float alpha = min(1.0, charA + halo * 0.7);
+
+  gl_FragColor = vec4(col3, alpha);
+}
+`;
+
+/* ── shader helpers ── */
+function compileShader(src, type){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error('Shader: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+function makeProgram(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(vs, gl.VERTEX_SHADER));
+  gl.attachShader(p, compileShader(fs, gl.FRAGMENT_SHADER));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS))
+    throw new Error('Program: ' + gl.getProgramInfoLog(p));
+  return p;
+}
+
+const fadeProg  = makeProgram(FADE_VS, FADE_FS);
+const glyphProg = makeProgram(GLYPH_VS, GLYPH_FS);
+
+/* cache attribute / uniform locations */
+const fade_a_pos    = gl.getAttribLocation (fadeProg,  'a_pos');
+const fade_u_alpha  = gl.getUniformLocation(fadeProg,  'u_alpha');
+
+const g_a_pos       = gl.getAttribLocation (glyphProg, 'a_pos');
+const g_a_charIdx   = gl.getAttribLocation (glyphProg, 'a_charIdx');
+const g_a_color     = gl.getAttribLocation (glyphProg, 'a_color');
+const g_a_glow      = gl.getAttribLocation (glyphProg, 'a_glow');
+const g_u_res       = gl.getUniformLocation(glyphProg, 'u_res');
+const g_u_dpr       = gl.getUniformLocation(glyphProg, 'u_dpr');
+const g_u_cellSize  = gl.getUniformLocation(glyphProg, 'u_cellSize');
+const g_u_sizeScale = gl.getUniformLocation(glyphProg, 'u_sizeScale');
+const g_u_atlas     = gl.getUniformLocation(glyphProg, 'u_atlas');
+const g_u_atlasGrid = gl.getUniformLocation(glyphProg, 'u_atlasGrid');
+const g_u_glowBlur  = gl.getUniformLocation(glyphProg, 'u_glowBlur');
+
+/* static fullscreen quad VBO */
+const quadVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+gl.bufferData(gl.ARRAY_BUFFER,
+  new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+/* dynamic glyph VBO — interleaved: [x, y, charIdx, r, g, b, wanderGlow] */
+const STRIDE_F   = 7;
+const STRIDE_B   = STRIDE_F * 4;
+const MAX_GLYPHS = 14000;
+const glyphVBO   = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, glyphVBO);
+gl.bufferData(gl.ARRAY_BUFFER, MAX_GLYPHS * STRIDE_B, gl.DYNAMIC_DRAW);
+let packedData = new Float32Array(MAX_GLYPHS * STRIDE_F);
+
+gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+gl.enable(gl.BLEND);
+
+/* ════════════════════════════════════════════════════════════
+   TEXTURE ATLAS — pre-rasterise all glyphs via Canvas 2D,
+   upload once as a WebGL texture.  Rebuilt on charset change.
+   ════════════════════════════════════════════════════════════ */
+const ATLAS_CELL = 32;   /* px per glyph cell in the atlas */
+const ATLAS_COLS = 16;
+let atlasTexture = null;
+let atlasGrid    = [ATLAS_COLS, 6];
+
+function buildAtlas(){
+  const ROWS = Math.ceil(NCHARS / ATLAS_COLS);
+  const aw   = ATLAS_COLS * ATLAS_CELL;
+  const ah   = ROWS       * ATLAS_CELL;
+
+  const off  = document.createElement('canvas');
+  off.width  = aw; off.height = ah;
+  const ctx2 = off.getContext('2d');
+  ctx2.fillStyle = '#000'; ctx2.fillRect(0,0,aw,ah);
+  ctx2.fillStyle = '#fff';
+  ctx2.font      = `${Math.round(ATLAS_CELL * 0.88)}px VT323`;
+  ctx2.textAlign    = 'center';
+  ctx2.textBaseline = 'middle';
+  for(let i=0;i<NCHARS;i++){
+    const cx = (i % ATLAS_COLS) * ATLAS_CELL + ATLAS_CELL*0.5;
+    const cy = Math.floor(i / ATLAS_COLS) * ATLAS_CELL + ATLAS_CELL*0.5;
+    ctx2.fillText(CHARS[i], cx, cy);
+  }
+
+  if(!atlasTexture) atlasTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  atlasGrid = [ATLAS_COLS, ROWS];
+}
+
+/* ── palette as pre-parsed RGB floats ── */
+function hexToRGB(hex){
+  return [
+    parseInt(hex.slice(1,3),16)/255,
+    parseInt(hex.slice(3,5),16)/255,
+    parseInt(hex.slice(5,7),16)/255,
+  ];
+}
 
 function resize(){
   W = window.innerWidth;
@@ -530,8 +716,8 @@ function resize(){
   canvas.height = Math.floor(H * DPR);
   canvas.style.width  = W + 'px';
   canvas.style.height = H + 'px';
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  if (currentImg) processImage(currentImg);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  if(currentImg) processImage(currentImg);
 }
 window.addEventListener('resize', ()=>{ clearTimeout(window.__rsz); window.__rsz = setTimeout(resize,120); });
 
@@ -562,14 +748,10 @@ let   NCHARS       = CHARS.length;
 
 /* ── color palette: lime / green / cyan / teal family ── */
 const PALETTE = [
-  '#AAFF00',   /* bright chartreuse  */
-  '#00FF41',   /* phosphor green     */
-  '#00FFFF',   /* bright cyan        */
-  '#00E5FF',   /* sky cyan           */
-  '#40FFD0',   /* seafoam            */
-  '#00CCAA',   /* teal               */
+  '#AAFF00', '#00FF41', '#00FFFF', '#00E5FF', '#40FFD0', '#00CCAA',
 ];
-const NCOLORS = PALETTE.length;
+const NCOLORS   = PALETTE.length;
+let   PALETTE_RGB = PALETTE.map(hexToRGB); /* pre-parsed for GPU packing */
 
 /* ── density settings ── */
 const DENSITIES = ['HIGH','MED','LOW'];
@@ -592,19 +774,7 @@ const BAYER = new Uint8Array([
 /* ── particle arrays ── */
 let originX, originY, posX, posY, velX, velY;
 let freqA, freqB, freqC, phaseA, phaseB, phaseC, ampX, ampY, mass, dampCoef;
-
-/* per-particle character state */
-let charIdx;    /* Uint8Array  — index into CHARS               */
-let colorIdx;   /* Uint8Array  — index into PALETTE             */
-let charAge;    /* Uint16Array — frames since last char change  */
-let charPeriod; /* Uint8Array  — frames between char changes    */
-let colorAge;   /* Uint16Array — frames since last color change */
-let colorPeriod;/* Uint8Array  — frames between color changes   */
-
-/* render buckets — pre-allocated, indexed by colorIdx */
-let buckets, bucketLen;
-
-/* ── wanderer system (same as CRT gen) ── */
+let charIdx, colorIdx, charAge, charPeriod, colorAge, colorPeriod;
 let wanderOffX, wanderOffY;
 let wandererIdx, wanderAngle, wanderR, wanderSpd, wanderTimer, wanderState;
 let centroidX = 0, centroidY = 0, imageRadius = 100;
@@ -688,9 +858,9 @@ function processImage(img){
   wanderOffX = new Float32Array(particleCount);
   wanderOffY = new Float32Array(particleCount);
 
-  /* pre-allocate render buckets */
-  buckets    = Array.from({length: NCOLORS}, ()=> new Int32Array(particleCount));
-  bucketLen  = new Int32Array(NCOLORS);
+  /* grow GPU buffer if needed */
+  if(packedData.length < particleCount * STRIDE_F)
+    packedData = new Float32Array(particleCount * STRIDE_F);
 
   for (let i = 0; i < particleCount; i++){
     originX[i] = tx[i]; originY[i] = ty[i];
@@ -788,18 +958,13 @@ function tick(t){
   frameN++;
 
   fpsCount++;
-  if (t - lastFps > 500){
+  if(t - lastFps > 500){
     document.getElementById('fps').textContent =
       Math.round(fpsCount * 1000 / (t - lastFps)) + ' FPS';
     fpsCount = 0; lastFps = t;
   }
 
-  /* clear with mild fade — short trail on moving glyphs, no persistent glow */
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = `rgba(0,0,0,${cfg.fadeAlpha})`;
-  ctx.fillRect(0, 0, W, H);
-
-  if (particleCount > 0){
+  if(particleCount > 0){
     const time    = t * 0.001;
     const reactOn = reactive && mouse.active;
 
@@ -908,58 +1073,75 @@ function tick(t){
     }
 
     /* ════════════════════════════════════════════════════════
-       RENDER — batch by color to minimise fillStyle changes.
-       No glow, no additive blending — flat square character cells.
+       PACK GPU BUFFER — [x, y, charIdx, r, g, b, wanderGlow]
        ════════════════════════════════════════════════════════ */
-
-    /* reset buckets */
-    for (let c = 0; c < NCOLORS; c++) bucketLen[c] = 0;
-    for (let i = 0; i < particleCount; i++){
-      const c = colorIdx[i];
-      buckets[c][bucketLen[c]++] = i;
-    }
-
-    /* set font once — VT323 gives the chunky retro terminal look */
-    const fontSize = Math.ceil(CELL * cfg.sizeScale);
-    ctx.font = `${fontSize}px VT323`;
-    ctx.textBaseline = 'middle';
-    ctx.textAlign    = 'center';
-
-    /* draw each color bucket — shadowBlur adds a soft radial glow per glyph */
-    ctx.shadowBlur = cfg.glowBlur;
-    for (let c = 0; c < NCOLORS; c++){
-      const bl  = bucketLen[c];
-      if (bl === 0) continue;
-      ctx.fillStyle   = PALETTE[c];
-      ctx.shadowColor = PALETTE[c];
-      const bkt = buckets[c];
-      for (let k = 0; k < bl; k++){
-        const i = bkt[k];
-        ctx.fillText(CHARS[charIdx[i]], posX[i], posY[i]);
+    for(let i = 0; i < particleCount; i++){
+      const pal  = PALETTE_RGB[colorIdx[i]];
+      const oMag = wanderOffX[i]*wanderOffX[i] + wanderOffY[i]*wanderOffY[i];
+      const wGlow = oMag > 9 ? Math.min(1, Math.sqrt(oMag) / (imageRadius*0.55+1)) : 0;
+      const b = i * STRIDE_F;
+      packedData[b]   = posX[i];
+      packedData[b+1] = posY[i];
+      packedData[b+2] = charIdx[i];
+      /* wanderers get a bright accent color override */
+      if(wGlow > 0.05){
+        packedData[b+3] = 0.87 + (i&1)*0.10;
+        packedData[b+4] = 1.00 - (i&1)*0.32;
+        packedData[b+5] = (i&1) ? 0.27 : 0.93;
+      } else {
+        packedData[b+3] = pal[0];
+        packedData[b+4] = pal[1];
+        packedData[b+5] = pal[2];
       }
-    }
-    ctx.shadowBlur = 0;
-
-    /* ── wanderer override: render displaced wanderers in a bright
-       accent color so they read as rogue glyphs tearing through
-       the field. We draw them last so they're on top.            */
-    if (wandererIdx){
-      const nW = wandererIdx.length;
-      for (let w = 0; w < nW; w++){
-        const i   = wandererIdx[w];
-        const oMag2 = wanderOffX[i]*wanderOffX[i] + wanderOffY[i]*wanderOffY[i];
-        if (oMag2 > 9){
-          const wColor = (w & 1) ? '#DDFF44' : '#AAFFEE';
-          ctx.fillStyle   = wColor;
-          ctx.shadowColor = wColor;
-          ctx.shadowBlur  = 14;
-          ctx.fillText(CHARS[charIdx[i]], posX[i], posY[i]);
-          ctx.shadowBlur = 0;
-        }
-      }
+      packedData[b+6] = wGlow;
     }
 
-    ctx.globalAlpha = 1;
+    /* ── DRAW 1: phosphor fade quad ── */
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(fadeProg);
+    gl.uniform1f(fade_u_alpha, cfg.fadeAlpha);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+    gl.enableVertexAttribArray(fade_a_pos);
+    gl.vertexAttribPointer(fade_a_pos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    /* ── DRAW 2: glyph point sprites (additive blend → natural glow) ── */
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.useProgram(glyphProg);
+    gl.uniform2f(g_u_res, W, H);
+    gl.uniform1f(g_u_dpr, DPR);
+    gl.uniform1f(g_u_cellSize,  CELL);
+    gl.uniform1f(g_u_sizeScale, cfg.sizeScale);
+    gl.uniform1f(g_u_glowBlur,  cfg.glowBlur);
+    gl.uniform2f(g_u_atlasGrid, atlasGrid[0], atlasGrid[1]);
+    gl.uniform1i(g_u_atlas, 0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, glyphVBO);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, packedData.subarray(0, particleCount * STRIDE_F));
+
+    gl.enableVertexAttribArray(g_a_pos);
+    gl.enableVertexAttribArray(g_a_charIdx);
+    gl.enableVertexAttribArray(g_a_color);
+    gl.enableVertexAttribArray(g_a_glow);
+
+    gl.vertexAttribPointer(g_a_pos,     2, gl.FLOAT, false, STRIDE_B, 0);
+    gl.vertexAttribPointer(g_a_charIdx, 1, gl.FLOAT, false, STRIDE_B, 8);
+    gl.vertexAttribPointer(g_a_color,   3, gl.FLOAT, false, STRIDE_B, 12);
+    gl.vertexAttribPointer(g_a_glow,    1, gl.FLOAT, false, STRIDE_B, 24);
+
+    gl.drawArrays(gl.POINTS, 0, particleCount);
+  } else {
+    /* no particles yet — still need to darken each frame */
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(fadeProg);
+    gl.uniform1f(fade_u_alpha, 1.0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+    gl.enableVertexAttribArray(fade_a_pos);
+    gl.vertexAttribPointer(fade_a_pos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
   requestAnimationFrame(tick);
@@ -1036,7 +1218,7 @@ document.getElementById('reload').addEventListener('click', ()=>{
   particleCount = 0; currentImg = null;
   document.getElementById('particles').textContent = '0';
   setStatus('AWAITING SIGNAL');
-  ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
 });
 
 document.getElementById('density').addEventListener('click', e=>{
@@ -1050,9 +1232,9 @@ document.getElementById('charset').addEventListener('click', e=>{
   const key  = CHARSET_KEYS[charsetIdx];
   CHARS  = CHARSETS[key];
   NCHARS = CHARS.length;
+  buildAtlas(); /* rebuild GPU texture for new charset */
   e.currentTarget.textContent = `[ CHARSET ▪ ${key} ]`;
-  /* randomise all current chars to the new set */
-  if (charIdx) for (let i = 0; i < particleCount; i++) charIdx[i] = (Math.random() * NCHARS) | 0;
+  if(charIdx) for(let i=0;i<particleCount;i++) charIdx[i]=(Math.random()*NCHARS)|0;
 });
 
 document.getElementById('reactive').addEventListener('click', e=>{
@@ -1067,14 +1249,9 @@ document.getElementById('invert').addEventListener('click', e=>{
 });
 
 document.getElementById('save').addEventListener('click', ()=>{
-  const exp = document.createElement('canvas');
-  exp.width = canvas.width; exp.height = canvas.height;
-  const ec = exp.getContext('2d');
-  ec.fillStyle = '#000'; ec.fillRect(0,0,exp.width,exp.height);
-  ec.drawImage(canvas, 0, 0);
   const link = document.createElement('a');
   link.download = `glyph_${Date.now()}.png`;
-  link.href = exp.toDataURL('image/png');
+  link.href = canvas.toDataURL('image/png');
   link.click();
 });
 
@@ -1087,7 +1264,15 @@ setTimeout(()=>{
 }, 2000);
 
 document.getElementById('density').textContent = `[ DENSITY ▪ ${DENSITIES[densityIdx]} ]`;
-resize();
+
+/* wait for VT323 font before building the glyph texture atlas */
+document.fonts.load('28px VT323').then(()=>{
+  buildAtlas();
+  resize();
+}).catch(()=>{
+  buildAtlas();
+  resize();
+});
 
 /* ════════════════════════════════════════════════════════════
    SIDE PANEL + RECORDING
@@ -1178,6 +1363,7 @@ resize();
       charsetIdx = idx;
       const key = CHARSET_KEYS[idx];
       CHARS = CHARSETS[key]; NCHARS = CHARS.length;
+      buildAtlas();
       csOpts.forEach(b=>b.classList.toggle('active', parseInt(b.dataset.cs)===idx));
       document.getElementById('charset').textContent = `[ CHARSET ▪ ${key} ]`;
       if(charIdx) for(let i=0;i<particleCount;i++) charIdx[i]=(Math.random()*NCHARS)|0;
@@ -1202,17 +1388,12 @@ resize();
     particleCount=0; currentImg=null;
     document.getElementById('particles').textContent='0';
     setStatus('AWAITING SIGNAL');
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+    gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
   });
   document.getElementById('sp-export').addEventListener('click', ()=>{
-    const exp = document.createElement('canvas');
-    exp.width = canvas.width; exp.height = canvas.height;
-    const ec = exp.getContext('2d');
-    ec.fillStyle='#000'; ec.fillRect(0,0,exp.width,exp.height);
-    ec.drawImage(canvas,0,0);
     const link=document.createElement('a');
     link.download=`glyph_${Date.now()}.png`;
-    link.href=exp.toDataURL('image/png'); link.click();
+    link.href=canvas.toDataURL('image/png'); link.click();
   });
   document.getElementById('sp-reset').addEventListener('click', ()=>{
     Object.assign(cfg, DEFAULTS);
